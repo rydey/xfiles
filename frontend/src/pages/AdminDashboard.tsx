@@ -654,6 +654,7 @@ function CategoriesTab({
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null)
   const [categoryContacts, setCategoryContacts] = useState<Record<string, Contact[]>>({})
   const [addSearch, setAddSearch] = useState('')
+  const [selectedToAdd, setSelectedToAdd] = useState<Record<string, boolean>>({})
 
   const loadCategoryContacts = async (categoryId: string) => {
     try {
@@ -774,28 +775,43 @@ function CategoriesTab({
                       })
                       .slice(0, 30)
                       .map(c => (
-                        <button
+                        <label
                           key={c.id}
-                          onClick={async () => {
-                            try {
-                              await api.post(`/categories/${category.id}/contacts`, { contactId: parseInt(c.id) })
-                              await loadCategoryContacts(category.id)
-                              refreshAll()
-                            } catch (e: any) {
-                              alert(`Failed to add: ${e.message}`)
-                            }
-                          }}
-                          className="w-full text-left p-2 hover:bg-gray-50"
+                          className="w-full p-2 hover:bg-gray-50 flex items-center gap-3"
                         >
-                          <div className="flex items-center justify-between">
+                          <input
+                            type="checkbox"
+                            checked={!!selectedToAdd[c.id]}
+                            onChange={(e) => setSelectedToAdd(prev => ({ ...prev, [c.id]: e.target.checked }))}
+                          />
+                          <div className="flex-1 flex items-center justify-between">
                             <div>
                               <div className="text-sm font-medium">{c.name || 'No name'}</div>
                               <div className="text-xs text-gray-500">{c.phoneNumber}</div>
                             </div>
                             <span className="text-xs">{c.type}</span>
                           </div>
-                        </button>
+                        </label>
                       ))}
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      onClick={async () => {
+                        const ids = Object.keys(selectedToAdd).filter(k => selectedToAdd[k]).map(k => parseInt(k))
+                        if (ids.length === 0) return
+                        try {
+                          await api.post(`/categories/${category.id}/contacts/bulk`, { contactIds: ids })
+                          setSelectedToAdd({})
+                          await loadCategoryContacts(category.id)
+                          refreshAll()
+                        } catch (e: any) {
+                          alert(`Bulk add failed: ${e.message}`)
+                        }
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                      Add Selected
+                    </button>
                   </div>
 
                   {/* List contacts in category */}

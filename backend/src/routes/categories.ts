@@ -160,6 +160,32 @@ router.post('/:id/contacts', authenticateToken, requireAdmin, async (req, res) =
   }
 });
 
+// Bulk add contacts to category (admin only)
+router.post('/:id/contacts/bulk', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const categoryId = parseInt(req.params.id);
+    const { contactIds } = req.body as { contactIds?: Array<number | string> };
+    if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({ error: 'contactIds array required' });
+    }
+    const ids = contactIds
+      .map((v) => parseInt(v as any))
+      .filter((n) => !Number.isNaN(n));
+
+    if (ids.length === 0) return res.json({ added: 0 });
+
+    await prisma.contactCategory.createMany({
+      data: ids.map((contactId) => ({ categoryId, contactId })),
+      skipDuplicates: true,
+    });
+
+    return res.json({ added: ids.length });
+  } catch (error) {
+    console.error('Error bulk adding contacts to category:', error);
+    return res.status(500).json({ error: 'Failed to add contacts to category' });
+  }
+});
+
 // Remove a contact from category (admin only)
 router.delete('/:id/contacts/:contactId', authenticateToken, requireAdmin, async (req, res) => {
   try {
