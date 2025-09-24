@@ -42,7 +42,8 @@ const HomePage: React.FC = () => {
 
   useEffect(() => {
     if (searchTerm.trim() === '') {
-      setFilteredContacts(contacts);
+      // Default view: only contacts with more than 100 messages
+      setFilteredContacts(contacts.filter(c => (c.messageCount || 0) > 100));
     } else {
       const filtered = contacts.filter(contact => {
         const nameMatch = contact.name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -64,7 +65,8 @@ const HomePage: React.FC = () => {
     try {
       const response = await api.get('/contacts/public');
       setContacts(response.data.contacts);
-      setFilteredContacts(response.data.contacts);
+      // Initialize default view to >100 messages
+      setFilteredContacts((response.data.contacts as Contact[]).filter((c: Contact) => (c.messageCount || 0) > 100));
     } catch (e: any) {
       setError(`Failed to fetch contacts: ${e.message}`);
     } finally {
