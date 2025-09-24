@@ -21,6 +21,11 @@ out/
 *.db
 *.sqlite
 
+# Data files (large CSV/log files)
+*.csv
+*.txt
+*.log
+
 # Logs
 logs
 *.log
