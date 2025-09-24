@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { LogOut, Star, Tag, Plus, X, Save } from 'lucide-react'
+import { api } from '../lib/api'
 
 interface Contact {
   id: string;
@@ -19,7 +20,7 @@ interface Category {
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth()
-  const [activeTab, setActiveTab] = useState<'featured' | 'categories'>('featured')
+  const [activeTab, setActiveTab] = useState<'featured' | 'categories' | 'edit'>('featured')
   const [contacts, setContacts] = useState<Contact[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -27,6 +28,13 @@ export default function AdminDashboard() {
   const [newCategoryName, setNewCategoryName] = useState('')
   const [showAddCategory, setShowAddCategory] = useState(false)
   const [contactSearchTerm, setContactSearchTerm] = useState('')
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    phoneNumber: '',
+    type: 'INDIVIDUAL' as 'INDIVIDUAL' | 'GROUP',
+    categoryIds: [] as string[],
+  })
 
   useEffect(() => {
     fetchData()
@@ -36,16 +44,12 @@ export default function AdminDashboard() {
     setLoading(true)
     try {
       // Fetch contacts
-      const contactsResponse = await fetch('http://localhost:3001/api/contacts/public')
-      if (!contactsResponse.ok) throw new Error('Failed to fetch contacts')
-      const contactsData = await contactsResponse.json()
-      setContacts(contactsData.contacts)
+      const contactsResponse = await api.get('/contacts/public')
+      setContacts(contactsResponse.data.contacts)
 
       // Fetch categories
-      const categoriesResponse = await fetch('http://localhost:3001/api/categories/public')
-      if (!categoriesResponse.ok) throw new Error('Failed to fetch categories')
-      const categoriesData = await categoriesResponse.json()
-      setCategories(categoriesData.categories)
+      const categoriesResponse = await api.get('/categories/public')
+      setCategories(categoriesResponse.data.categories)
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -71,16 +75,7 @@ export default function AdminDashboard() {
     if (!newCategoryName.trim()) return
     
     try {
-      const response = await fetch('http://localhost:3001/api/categories', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ name: newCategoryName.trim() })
-      })
-      
-      if (!response.ok) throw new Error('Failed to create category')
+      const response = await api.post('/categories', { name: newCategoryName.trim() })
       
       setNewCategoryName('')
       setShowAddCategory(false)
@@ -94,14 +89,7 @@ export default function AdminDashboard() {
     if (!confirm('Are you sure you want to delete this category?')) return
     
     try {
-      const response = await fetch(`http://localhost:3001/api/categories/${categoryId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      })
-      
-      if (!response.ok) throw new Error('Failed to delete category')
+      await api.delete(`/categories/${categoryId}`)
       
       fetchData() // Refresh data
     } catch (e: any) {
@@ -112,6 +100,7 @@ export default function AdminDashboard() {
   const tabs = [
     { id: 'featured', label: 'Featured Contacts', icon: Star },
     { id: 'categories', label: 'Categories', icon: Tag },
+    { id: 'edit', label: 'Edit Contact', icon: Save },
   ] as const
 
   const renderTabContent = () => {
@@ -134,6 +123,37 @@ export default function AdminDashboard() {
           setShowAddCategory={setShowAddCategory}
           onAddCategory={addCategory}
           onDeleteCategory={deleteCategory}
+          loading={loading}
+          error={error}
+        />
+      case 'edit':
+        return <EditContactTab 
+          contacts={contacts}
+          categories={categories}
+          searchTerm={contactSearchTerm}
+          setSearchTerm={setContactSearchTerm}
+          selectedContact={selectedContact}
+          setSelectedContact={setSelectedContact}
+          editForm={editForm}
+          setEditForm={setEditForm}
+          onSave={async () => {
+            if (!selectedContact) return
+            setLoading(true)
+            setError(null)
+            try {
+              await api.put(`/contacts/${selectedContact.id}`, {
+                name: editForm.name,
+                phoneNumber: editForm.phoneNumber,
+                type: editForm.type,
+                categoryIds: editForm.categoryIds.map(id => parseInt(id)),
+              })
+              await fetchData()
+            } catch (e: any) {
+              setError(`Failed to save contact: ${e.message}`)
+            } finally {
+              setLoading(false)
+            }
+          }}
           loading={loading}
           error={error}
         />
@@ -202,6 +222,167 @@ export default function AdminDashboard() {
 
         {/* Tab Content */}
         {renderTabContent()}
+      </div>
+    </div>
+  )
+}
+// Edit Contact Tab Component
+function EditContactTab({
+  contacts,
+  categories,
+  searchTerm,
+  setSearchTerm,
+  selectedContact,
+  setSelectedContact,
+  editForm,
+  setEditForm,
+  onSave,
+  loading,
+  error
+}: {
+  contacts: Contact[]
+  categories: Category[]
+  searchTerm: string
+  setSearchTerm: (t: string) => void
+  selectedContact: Contact | null
+  setSelectedContact: (c: Contact | null) => void
+  editForm: { name: string; phoneNumber: string; type: 'INDIVIDUAL' | 'GROUP'; categoryIds: string[] }
+  setEditForm: (f: { name: string; phoneNumber: string; type: 'INDIVIDUAL' | 'GROUP'; categoryIds: string[] }) => void
+  onSave: () => void
+  loading: boolean
+  error: string | null
+}) {
+  if (loading) return <div className="text-center py-8">Loading...</div>
+  if (error) return <div className="text-center py-8 text-red-600">Error: {error}</div>
+
+  const filtered = contacts.filter(c => {
+    if (!searchTerm.trim()) return true
+    const s = searchTerm.toLowerCase()
+    return (
+      c.name?.toLowerCase().includes(s) ||
+      c.phoneNumber.includes(searchTerm) ||
+      c.phoneNumber.replace(/\D/g, '').includes(searchTerm.replace(/\D/g, ''))
+    )
+  }).slice(0, 50)
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Edit Contact</h2>
+
+        {/* Search and select */}
+        <div className="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <div className="mb-3">
+              <input
+                type="text"
+                placeholder="Search contacts by name or phone number..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-3 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="max-h-80 overflow-auto divide-y divide-gray-100 border rounded-lg">
+              {filtered.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setSelectedContact(c)
+                    setEditForm({
+                      name: c.name || '',
+                      phoneNumber: c.phoneNumber,
+                      type: c.type,
+                      categoryIds: [],
+                    })
+                  }}
+                  className={`w-full text-left p-3 hover:bg-gray-50 ${selectedContact?.id === c.id ? 'bg-blue-50' : ''}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-gray-900">{c.name || 'No name'}</div>
+                      <div className="text-sm text-gray-500">{c.phoneNumber}</div>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">{c.type}</span>
+                  </div>
+                </button>
+              ))}
+              {filtered.length === 0 && (
+                <div className="p-4 text-sm text-gray-500">No contacts match your search.</div>
+              )}
+            </div>
+          </div>
+
+          {/* Edit form */}
+          <div>
+            {!selectedContact ? (
+              <div className="text-gray-500">Select a contact to edit.</div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                  <input
+                    type="text"
+                    value={editForm.phoneNumber}
+                    onChange={(e) => setEditForm({ ...editForm, phoneNumber: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                  <select
+                    value={editForm.type}
+                    onChange={(e) => setEditForm({ ...editForm, type: e.target.value as 'INDIVIDUAL' | 'GROUP' })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="INDIVIDUAL">INDIVIDUAL</option>
+                    <option value="GROUP">GROUP</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Categories</label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-auto border rounded p-2">
+                    {categories.map(cat => {
+                      const checked = editForm.categoryIds.includes(cat.id)
+                      return (
+                        <label key={cat.id} className="inline-flex items-center space-x-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditForm({ ...editForm, categoryIds: [...editForm.categoryIds, cat.id] })
+                              } else {
+                                setEditForm({ ...editForm, categoryIds: editForm.categoryIds.filter(id => id !== cat.id) })
+                              }
+                            }}
+                          />
+                          <span>{cat.name}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="pt-2">
+                  <button
+                    onClick={onSave}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

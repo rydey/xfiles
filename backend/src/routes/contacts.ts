@@ -1,6 +1,6 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
-import { authenticateToken } from '../middleware/auth';
+import { PrismaClient, ContactType } from '@prisma/client';
+import { authenticateToken, requireAdmin } from '../middleware/auth';
 import { normalizePhoneNumber, isSameContact } from '../utils/phoneUtils';
 
 const router = express.Router();
@@ -177,3 +177,79 @@ router.get('/:id', async (req, res) => {
 });
 
 export default router;
+
+// Update a contact (admin only)
+router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const contactId = parseInt(req.params.id);
+    const { name, phoneNumber, type, categoryIds } = req.body as {
+      name?: string | null;
+      phoneNumber?: string;
+      type?: 'INDIVIDUAL' | 'GROUP';
+      categoryIds?: number[] | string[];
+    };
+
+    if (Number.isNaN(contactId)) {
+      return res.status(400).json({ error: 'Invalid contact ID' });
+    }
+
+    // Validate type
+    let prismaType: ContactType | undefined;
+    if (type) {
+      if (type !== 'INDIVIDUAL' && type !== 'GROUP') {
+        return res.status(400).json({ error: 'Invalid contact type' });
+      }
+      prismaType = type as ContactType;
+    }
+
+    // Prepare category connections
+    let categoriesUpdate = undefined as
+      | { deleteMany: any[]; create: { category: { connect: { id: number } } }[] }
+      | undefined;
+
+    if (Array.isArray(categoryIds)) {
+      const ids = categoryIds.map((id) => parseInt(id as any)).filter((n) => !Number.isNaN(n));
+      categoriesUpdate = {
+        deleteMany: {},
+        create: ids.map((id) => ({ category: { connect: { id } } })),
+      };
+    }
+
+    // Normalize phone if provided
+    let updatedPhone: string | undefined = undefined;
+    if (phoneNumber) {
+      updatedPhone = normalizePhoneNumber(phoneNumber);
+    }
+
+    const updated = await prisma.contact.update({
+      where: { id: contactId },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(updatedPhone !== undefined ? { phoneNumber: updatedPhone } : {}),
+        ...(prismaType ? { type: prismaType } : {}),
+        ...(categoriesUpdate ? { categories: categoriesUpdate } : {}),
+      },
+      include: {
+        categories: { include: { category: true } },
+        _count: { select: { sentMessages: true, receivedMessages: true } },
+      },
+    });
+
+    const serialized = {
+      ...updated,
+      id: updated.id.toString(),
+      messageCount: (updated._count.sentMessages || 0) + (updated._count.receivedMessages || 0),
+      categories: updated.categories.map((cc) => ({
+        category: { ...cc.category, id: cc.category.id.toString() },
+      })),
+    };
+
+    return res.json({ contact: serialized });
+  } catch (error: any) {
+    console.error('Error updating contact:', error);
+    if (error?.code === 'P2002') {
+      return res.status(400).json({ error: 'Phone number already exists' });
+    }
+    return res.status(500).json({ error: 'Failed to update contact' });
+  }
+});
