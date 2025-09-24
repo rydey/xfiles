@@ -35,8 +35,6 @@ router.get('/public', authenticateToken, async (req, res) => {
       id: contact.id.toString(),
       messageCount: (contact._count.sentMessages || 0) + (contact._count.receivedMessages || 0),
       categories: contact.categories.map(cc => ({
-        ...cc,
-        id: cc.id.toString(),
         category: {
           ...cc.category,
           id: cc.category.id.toString()
@@ -103,8 +101,6 @@ router.get('/', async (req, res) => {
       ...contact,
       id: contact.id.toString(),
       categories: contact.categories.map(cc => ({
-        ...cc,
-        id: cc.id.toString(),
         category: {
           ...cc.category,
           id: cc.category.id.toString()
@@ -158,8 +154,6 @@ router.get('/:id', async (req, res) => {
       ...contact,
       id: contact.id.toString(),
       categories: contact.categories.map(cc => ({
-        ...cc,
-        id: cc.id.toString(),
         category: {
           ...cc.category,
           id: cc.category.id.toString()

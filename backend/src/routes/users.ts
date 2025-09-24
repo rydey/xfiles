@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { PrismaClient } from '@prisma/client';
 import { authenticateToken, requireAdmin } from '../middleware/auth';
@@ -12,7 +12,7 @@ router.get('/', authenticateToken, requireAdmin, [
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('search').optional().isString(),
   query('role').optional().isIn(['ADMIN', 'JOURNALIST'])
-], async (req, res) => {
+], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -69,7 +69,7 @@ router.get('/', authenticateToken, requireAdmin, [
 });
 
 // Get single user (Admin only)
-router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: parseInt(req.params.id) },
@@ -97,7 +97,7 @@ router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
 router.put('/:id', authenticateToken, requireAdmin, [
   body('username').optional().isString().isLength({ min: 3 }),
   body('role').optional().isIn(['ADMIN', 'JOURNALIST'])
-], async (req, res) => {
+], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -143,7 +143,7 @@ router.put('/:id', authenticateToken, requireAdmin, [
 });
 
 // Delete user (Admin only)
-router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     // Prevent admin from deleting themselves
     const currentUser = await prisma.user.findUnique({

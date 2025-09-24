@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { PrismaClient } from '@prisma/client';
 import { authenticateToken, requireAdmin } from '../middleware/auth';
@@ -285,7 +285,7 @@ router.get('/', authenticateToken, [
   query('search').optional().isString(),
   query('dateFrom').optional().isISO8601(),
   query('dateTo').optional().isISO8601()
-], async (req, res) => {
+], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -424,7 +424,7 @@ router.post('/', authenticateToken, requireAdmin, [
   body('attachment').optional().isString(),
   body('location').optional().isString(),
   body('rawLine').optional().isString()
-], async (req, res) => {
+], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -491,7 +491,7 @@ router.put('/:id', authenticateToken, requireAdmin, [
   body('correctedReceiverId').optional().isInt(),
   body('attachment').optional().isString(),
   body('location').optional().isString()
-], async (req, res) => {
+], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

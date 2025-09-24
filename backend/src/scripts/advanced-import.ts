@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, MessageType } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
@@ -15,7 +15,7 @@ interface ImportStats {
 }
 
 interface ParsedMessage {
-  messageType: 'SMS' | 'CALL' | 'INSTANT' | 'CALENDAR';
+  messageType: MessageType;
   direction: 'FROM' | 'TO' | 'UNKNOWN';
   senderNumber?: string;
   senderName?: string;
@@ -25,7 +25,7 @@ interface ParsedMessage {
   timestamp: Date;
   attachment?: string;
   location?: string;
-  rawLine: string;
+  rawLine?: string;
 }
 
 class AdvancedLogImporter {
@@ -172,7 +172,7 @@ class AdvancedLogImporter {
         const timestamp = this.parseDate(dateStr);
         
         return {
-          messageType: 'SMS',
+          messageType: MessageType.SMS,
           direction: direction.toUpperCase() as 'FROM' | 'TO',
           senderNumber: direction === 'From' ? number : undefined,
           senderName: direction === 'From' ? name?.trim() : undefined,
@@ -200,7 +200,7 @@ class AdvancedLogImporter {
         const timestamp = this.parseDate(dateStr);
         
         return {
-          messageType: 'CALL',
+          messageType: MessageType.CALL,
           direction: direction.toUpperCase() as 'FROM' | 'TO',
           senderNumber: direction === 'From' ? number : undefined,
           senderName: direction === 'From' ? name?.trim() : undefined,
@@ -228,7 +228,7 @@ class AdvancedLogImporter {
         const timestamp = timeStr ? this.parseDateTime(dateStr, timeStr) : this.parseDate(dateStr);
         
         return {
-          messageType: 'CALENDAR',
+          messageType: MessageType.INSTANT, // Using INSTANT for calendar events
           direction: 'UNKNOWN',
           content: content?.trim(),
           timestamp
@@ -253,7 +253,7 @@ class AdvancedLogImporter {
         const timestamp = this.parseDate(dateStr);
         
         return {
-          messageType: 'INSTANT',
+          messageType: MessageType.INSTANT,
           direction: direction.toUpperCase() as 'FROM' | 'TO',
           senderNumber: direction === 'From' ? number : undefined,
           senderName: direction === 'From' ? name?.trim() : undefined,
@@ -375,7 +375,7 @@ class AdvancedLogImporter {
         content: parsed.content,
         attachment: parsed.attachment,
         location: parsed.location,
-        rawLine: parsed.rawLine
+        rawLine: parsed.rawLine || null
       }
     });
 

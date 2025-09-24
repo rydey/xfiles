@@ -1,6 +1,6 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import { PrismaClient } from '@prisma/client';
 
@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 router.post('/login', [
   body('username').isString().isLength({ min: 3 }),
   body('password').isLength({ min: 6 })
-], async (req, res) => {
+], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -28,10 +28,15 @@ router.post('/login', [
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET is not defined');
+    }
+    
     const token = jwt.sign(
       { userId: user.id, username: user.username, role: user.role },
-      process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      jwtSecret,
+      { expiresIn: '7d' }
     );
 
     res.json({
@@ -53,7 +58,7 @@ router.post('/register', [
   body('username').isString().isLength({ min: 3 }),
   body('password').isLength({ min: 6 }),
   body('role').isIn(['ADMIN', 'JOURNALIST'])
-], async (req, res) => {
+], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -95,7 +100,7 @@ router.post('/register', [
 });
 
 // Get current user
-router.get('/me', async (req, res) => {
+router.get('/me', async (req: Request, res: Response) => {
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -104,7 +109,12 @@ router.get('/me', async (req, res) => {
       return res.status(401).json({ error: 'Access token required' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return res.status(500).json({ error: 'JWT_SECRET is not defined' });
+    }
+    
+    const decoded = jwt.verify(token, jwtSecret) as any;
     
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },

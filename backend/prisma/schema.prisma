@@ -104,6 +104,7 @@ enum ContactType {
 enum MessageType {
   SMS
   INSTANT
+  CALL
 }
 
 enum MessageDirection {

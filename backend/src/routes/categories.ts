@@ -54,7 +54,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
       id: category.id.toString(),
       contactCount: 0
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating category:', error);
     if (error.code === 'P2002') {
       res.status(400).json({ error: 'Category name already exists' });
