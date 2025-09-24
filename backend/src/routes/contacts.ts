@@ -1,5 +1,5 @@
 import express from 'express';
-import { PrismaClient, ContactType } from '@prisma/client';
+import { PrismaClient, ContactType, Prisma } from '@prisma/client';
 import { authenticateToken, requireAdmin } from '../middleware/auth';
 import { normalizePhoneNumber, isSameContact } from '../utils/phoneUtils';
 
@@ -203,9 +203,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     // Prepare category connections
-    let categoriesUpdate = undefined as
-      | { deleteMany: any[]; create: { category: { connect: { id: number } } }[] }
-      | undefined;
+    let categoriesUpdate: Prisma.ContactCategoryUpdateManyWithoutContactNestedInput | undefined = undefined;
 
     if (Array.isArray(categoryIds)) {
       const ids = categoryIds.map((id) => parseInt(id as any)).filter((n) => !Number.isNaN(n));
