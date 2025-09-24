@@ -26,21 +26,21 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Routes>
-        <Route 
-          path="/" 
+        <Route
+          path="/"
           element={<Navigate to="/home" replace />}
         />
-        <Route 
-          path="/admin" 
+        <Route
+          path="/admin"
           element={
-            user.role === 'ADMIN' 
+            user.role === 'ADMIN'
               ? <AdminDashboard />
               : <Navigate to="/journalist" replace />
-          } 
+          }
         />
-        <Route 
-          path="/journalist" 
-          element={<JournalistPortal />} 
+        <Route
+          path="/journalist"
+          element={<JournalistPortal />}
         />
         <Route path="/home" element={<HomePage />} />
         <Route path="/chat/:contactId" element={<ChatLogPage />} />
