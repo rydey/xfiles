@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 echo "🚀 Starting backend server..."
 
@@ -6,13 +7,15 @@ echo "🚀 Starting backend server..."
 echo "📦 Generating Prisma client..."
 npx prisma generate
 
-# Push database schema
-echo "🗄️ Pushing database schema..."
-npx prisma db push
-
-# Seed database if needed
-echo "🌱 Seeding database..."
-npm run db:seed
+# Optionally run migrations/seed (disabled by default in production)
+if [[ "${RUN_DB_MIGRATIONS:-false}" == "true" ]]; then
+  echo "🗄️ Pushing database schema..."
+  npx prisma db push
+  echo "🌱 Seeding database..."
+  npm run db:seed
+else
+  echo "⏭️  Skipping db push/seed (set RUN_DB_MIGRATIONS=true to enable)"
+fi
 
 # Build and start the server
 echo "🛠️ Building backend..."
