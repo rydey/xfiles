@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(JOURNALIST)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Contact {
+  id          Int      @id @default(autoincrement())
+  name        String?
+  phoneNumber String   @unique @map("phone_number")
+  type        ContactType @default(INDIVIDUAL)
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Many-to-many relationship with categories
+  categories ContactCategory[]
+
+  // Messages where this contact is sender
+  sentMessages Message[] @relation("MessageSender")
+  // Messages where this contact is receiver
+  receivedMessages Message[] @relation("MessageReceiver")
+  // Messages where this contact is corrected receiver
+  correctedMessages Message[] @relation("MessageCorrectedReceiver")
+
+  @@map("contacts")
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Many-to-many relationship with contacts
+  contacts ContactCategory[]
+
+  @@map("categories")
+}
+
+model ContactCategory {
+  contactId  Int @map("contact_id")
+  categoryId Int @map("category_id")
+  
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, categoryId])
+  @@map("contact_categories")
+}
+
+model Message {
+  id                 BigInt           @id @default(autoincrement())
+  messageType        MessageType      @map("message_type")
+  direction          MessageDirection @default(UNKNOWN)
+  senderId           Int?             @map("sender_id")
+  receiverId         Int?             @map("receiver_id")
+  timestamp          DateTime         @db.Timestamptz
+  content            String?
+  attachment         String?
+  location           String?
+  deleted            Boolean          @default(false)
+  correctedType      String?          @map("corrected_type")
+  correctedReceiverId Int?           @map("corrected_receiver_id")
+  rawLine            String?          @map("raw_line")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  sender             Contact? @relation("MessageSender", fields: [senderId], references: [id])
+  receiver           Contact? @relation("MessageReceiver", fields: [receiverId], references: [id])
+  correctedReceiver  Contact? @relation("MessageCorrectedReceiver", fields: [correctedReceiverId], references: [id])
+
+  @@map("messages")
+}
+
+enum UserRole {
+  ADMIN
+  JOURNALIST
+}
+
+enum ContactType {
+  INDIVIDUAL
+  GROUP
+}
+
+enum MessageType {
+  SMS
+  INSTANT
+}
+
+enum MessageDirection {
+  FROM
+  TO
+  UNKNOWN
+}
