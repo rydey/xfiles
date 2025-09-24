@@ -35,6 +35,8 @@ export default function AdminDashboard() {
     type: 'INDIVIDUAL' as 'INDIVIDUAL' | 'GROUP',
     categoryIds: [] as string[],
   })
+  const [mergeTargetSearch, setMergeTargetSearch] = useState('')
+  const [mergeTarget, setMergeTarget] = useState<Contact | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -75,7 +77,7 @@ export default function AdminDashboard() {
     if (!newCategoryName.trim()) return
     
     try {
-      const response = await api.post('/categories', { name: newCategoryName.trim() })
+      await api.post('/categories', { name: newCategoryName.trim() })
       
       setNewCategoryName('')
       setShowAddCategory(false)
@@ -153,6 +155,13 @@ export default function AdminDashboard() {
             } finally {
               setLoading(false)
             }
+          }}
+          mergeTargetSearch={mergeTargetSearch}
+          setMergeTargetSearch={setMergeTargetSearch}
+          mergeTarget={mergeTarget}
+          setMergeTarget={setMergeTarget}
+          onMerged={async () => {
+            await fetchData()
           }}
           loading={loading}
           error={error}
@@ -237,6 +246,11 @@ function EditContactTab({
   editForm,
   setEditForm,
   onSave,
+  mergeTargetSearch,
+  setMergeTargetSearch,
+  mergeTarget,
+  setMergeTarget,
+  onMerged,
   loading,
   error
 }: {
@@ -249,6 +263,11 @@ function EditContactTab({
   editForm: { name: string; phoneNumber: string; type: 'INDIVIDUAL' | 'GROUP'; categoryIds: string[] }
   setEditForm: (f: { name: string; phoneNumber: string; type: 'INDIVIDUAL' | 'GROUP'; categoryIds: string[] }) => void
   onSave: () => void
+  mergeTargetSearch: string
+  setMergeTargetSearch: (t: string) => void
+  mergeTarget: Contact | null
+  setMergeTarget: (c: Contact | null) => void
+  onMerged: () => void
   loading: boolean
   error: string | null
 }) {
@@ -294,6 +313,7 @@ function EditContactTab({
                       type: c.type,
                       categoryIds: [],
                     })
+                    setMergeTarget(null)
                   }}
                   className={`w-full text-left p-3 hover:bg-gray-50 ${selectedContact?.id === c.id ? 'bg-blue-50' : ''}`}
                 >
@@ -371,13 +391,75 @@ function EditContactTab({
                     })}
                   </div>
                 </div>
-                <div className="pt-2">
+                <div className="pt-2 flex items-center gap-3">
                   <button
                     onClick={onSave}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     Save Changes
                   </button>
+                </div>
+
+                {/* Merge section */}
+                <div className="pt-6 mt-4 border-t">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900">Merge With Another Contact</h3>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-2">Select a second contact to merge into the current one. All messages and categories will be moved to the current contact, and the other contact will be deleted.</p>
+                  <div className="mb-3">
+                    <input
+                      type="text"
+                      placeholder="Search contact to merge..."
+                      value={mergeTargetSearch}
+                      onChange={(e) => setMergeTargetSearch(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-auto divide-y border rounded">
+                    {contacts
+                      .filter(c => c.id !== selectedContact.id)
+                      .filter(c => {
+                        if (!mergeTargetSearch.trim()) return true
+                        const s = mergeTargetSearch.toLowerCase()
+                        return c.name?.toLowerCase().includes(s) || c.phoneNumber.includes(mergeTargetSearch)
+                      })
+                      .slice(0, 30)
+                      .map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => setMergeTarget(c)}
+                          className={`w-full text-left p-2 hover:bg-gray-50 ${mergeTarget?.id === c.id ? 'bg-red-50' : ''}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-medium">{c.name || 'No name'}</div>
+                              <div className="text-xs text-gray-500">{c.phoneNumber}</div>
+                            </div>
+                            <span className="text-xs">{c.type}</span>
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                  <div className="mt-3">
+                    <button
+                      disabled={!mergeTarget}
+                      onClick={async () => {
+                        if (!selectedContact || !mergeTarget) return
+                        if (!confirm('This will merge the selected contact into the current one and delete it. Proceed?')) return
+                        try {
+                          await api.post('/contacts/merge', { sourceId: mergeTarget.id, targetId: selectedContact.id })
+                          setMergeTarget(null)
+                          onMerged()
+                          alert('Contacts merged successfully')
+                        } catch (e: any) {
+                          alert(`Failed to merge: ${e.message}`)
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg text-white ${mergeTarget ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-400 cursor-not-allowed'}`}
+                    >
+                      Merge Into Current
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

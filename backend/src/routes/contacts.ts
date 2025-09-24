@@ -251,3 +251,77 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     return res.status(500).json({ error: 'Failed to update contact' });
   }
 });
+
+// Merge two contacts (admin only)
+router.post('/merge', authenticateToken, requireAdmin, async (req, res) => {
+  const { sourceId, targetId } = req.body as { sourceId: number | string; targetId: number | string };
+
+  const source = parseInt(sourceId as any);
+  const target = parseInt(targetId as any);
+
+  if (Number.isNaN(source) || Number.isNaN(target) || source === target) {
+    return res.status(400).json({ error: 'Invalid source/target contact IDs' });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const [sourceContact, targetContact] = await Promise.all([
+        tx.contact.findUnique({ where: { id: source }, include: { categories: true } }),
+        tx.contact.findUnique({ where: { id: target }, include: { categories: true } }),
+      ]);
+
+      if (!sourceContact || !targetContact) {
+        throw new Error('Source or target contact not found');
+      }
+
+      // 1) Reassign messages
+      await Promise.all([
+        tx.message.updateMany({ where: { senderId: source }, data: { senderId: target } }),
+        tx.message.updateMany({ where: { receiverId: source }, data: { receiverId: target } }),
+        tx.message.updateMany({ where: { correctedReceiverId: source }, data: { correctedReceiverId: target } }),
+      ]);
+
+      // 2) Move categories (add missing ones to target)
+      const sourceCategoryIds = sourceContact.categories.map((cc) => cc.categoryId);
+      if (sourceCategoryIds.length > 0) {
+        // Determine which category links are missing on the target
+        const targetCategoryIds = new Set(targetContact.categories.map((cc) => cc.categoryId));
+        const toCreate = sourceCategoryIds.filter((id) => !targetCategoryIds.has(id));
+        if (toCreate.length > 0) {
+          await tx.contactCategory.createMany({
+            data: toCreate.map((categoryId) => ({ contactId: target, categoryId })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      // 3) Delete source contact (cascade removes source contact_categories)
+      await tx.contact.delete({ where: { id: source } });
+
+      // Return updated target
+      const updated = await tx.contact.findUnique({
+        where: { id: target },
+        include: {
+          categories: { include: { category: true } },
+          _count: { select: { sentMessages: true, receivedMessages: true } },
+        },
+      });
+
+      return updated;
+    });
+
+    if (!result) return res.status(500).json({ error: 'Merge failed' });
+
+    const serialized = {
+      ...result,
+      id: result.id.toString(),
+      messageCount: (result._count.sentMessages || 0) + (result._count.receivedMessages || 0),
+      categories: result.categories.map((cc) => ({ category: { ...cc.category, id: cc.category.id.toString() } })),
+    } as any;
+
+    return res.json({ contact: serialized });
+  } catch (err: any) {
+    console.error('Error merging contacts:', err);
+    return res.status(500).json({ error: err.message || 'Failed to merge contacts' });
+  }
+});
