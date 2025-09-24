@@ -119,12 +119,14 @@ export default function AdminDashboard() {
       case 'categories':
         return <CategoriesTab 
           categories={categories}
+          allContacts={contacts}
           newCategoryName={newCategoryName}
           setNewCategoryName={setNewCategoryName}
           showAddCategory={showAddCategory}
           setShowAddCategory={setShowAddCategory}
           onAddCategory={addCategory}
           onDeleteCategory={deleteCategory}
+          refreshAll={fetchData}
           loading={loading}
           error={error}
         />
@@ -623,27 +625,44 @@ function FeaturedContactsTab({
 // Categories Tab Component
 function CategoriesTab({ 
   categories,
+  allContacts,
   newCategoryName,
   setNewCategoryName,
   showAddCategory,
   setShowAddCategory,
   onAddCategory,
   onDeleteCategory,
+  refreshAll,
   loading,
   error
 }: { 
   categories: Category[]
+  allContacts: Contact[]
   newCategoryName: string
   setNewCategoryName: (name: string) => void
   showAddCategory: boolean
   setShowAddCategory: (show: boolean) => void
   onAddCategory: () => void
   onDeleteCategory: (categoryId: string) => void
+  refreshAll: () => void
   loading: boolean
   error: string | null
 }) {
   if (loading) return <div className="text-center py-8">Loading categories...</div>
   if (error) return <div className="text-center py-8 text-red-600">Error: {error}</div>
+
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null)
+  const [categoryContacts, setCategoryContacts] = useState<Record<string, Contact[]>>({})
+  const [addSearch, setAddSearch] = useState('')
+
+  const loadCategoryContacts = async (categoryId: string) => {
+    try {
+      const res = await api.get(`/categories/${categoryId}/contacts`)
+      setCategoryContacts(prev => ({ ...prev, [categoryId]: res.data.contacts }))
+    } catch (e: any) {
+      console.error('Failed to load category contacts', e)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -689,24 +708,126 @@ function CategoriesTab({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-3">
           {categories.map(category => (
-            <div 
-              key={category.id}
-              className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium text-gray-900">{category.name}</h3>
-                <button
-                  onClick={() => onDeleteCategory(category.id)}
-                  className="text-red-500 hover:text-red-700 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+            <div key={category.id} className="border border-gray-200 rounded-lg">
+              <div className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={async () => {
+                      const next = expandedCategoryId === category.id ? null : category.id
+                      setExpandedCategoryId(next)
+                      if (next) await loadCategoryContacts(category.id)
+                    }}
+                    className="text-sm px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                  >
+                    {expandedCategoryId === category.id ? 'Hide' : 'View'}
+                  </button>
+                  <h3 className="font-medium text-gray-900">{category.name}</h3>
+                  <span className="text-sm text-gray-500">{category.contactCount} contacts</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      const newName = prompt('New category name', category.name)
+                      if (!newName || !newName.trim()) return
+                      try {
+                        await api.put(`/categories/${category.id}`, { name: newName.trim() })
+                        refreshAll()
+                      } catch (e: any) {
+                        alert(`Rename failed: ${e.message}`)
+                      }
+                    }}
+                    className="text-sm px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Rename
+                  </button>
+                  <button
+                    onClick={() => onDeleteCategory(category.id)}
+                    className="text-sm px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-              <p className="text-sm text-gray-500">
-                {category.contactCount} contacts
-              </p>
+
+              {expandedCategoryId === category.id && (
+                <div className="p-4 border-t space-y-3">
+                  {/* Add contact to category */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Search contacts to add..."
+                      value={addSearch}
+                      onChange={(e) => setAddSearch(e.target.value)}
+                      className="flex-1 px-3 py-2 border rounded"
+                    />
+                    <div className="text-sm text-gray-500">{(categoryContacts[category.id]?.length || 0)} in category</div>
+                  </div>
+                  <div className="max-h-48 overflow-auto divide-y border rounded">
+                    {allContacts
+                      .filter(c => !(categoryContacts[category.id]?.some(cc => cc.id === c.id)))
+                      .filter(c => {
+                        if (!addSearch.trim()) return true
+                        const s = addSearch.toLowerCase()
+                        return c.name?.toLowerCase().includes(s) || c.phoneNumber.includes(addSearch)
+                      })
+                      .slice(0, 30)
+                      .map(c => (
+                        <button
+                          key={c.id}
+                          onClick={async () => {
+                            try {
+                              await api.post(`/categories/${category.id}/contacts`, { contactId: parseInt(c.id) })
+                              await loadCategoryContacts(category.id)
+                              refreshAll()
+                            } catch (e: any) {
+                              alert(`Failed to add: ${e.message}`)
+                            }
+                          }}
+                          className="w-full text-left p-2 hover:bg-gray-50"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-medium">{c.name || 'No name'}</div>
+                              <div className="text-xs text-gray-500">{c.phoneNumber}</div>
+                            </div>
+                            <span className="text-xs">{c.type}</span>
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+
+                  {/* List contacts in category */}
+                  <div className="border rounded">
+                    {(categoryContacts[category.id] || []).map(c => (
+                      <div key={c.id} className="flex items-center justify-between p-2 border-b last:border-b-0">
+                        <div>
+                          <div className="text-sm font-medium">{c.name || 'No name'}</div>
+                          <div className="text-xs text-gray-500">{c.phoneNumber}</div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await api.delete(`/categories/${category.id}/contacts/${c.id}`)
+                              await loadCategoryContacts(category.id)
+                              refreshAll()
+                            } catch (e: any) {
+                              alert(`Failed to remove: ${e.message}`)
+                            }
+                          }}
+                          className="text-sm px-2 py-1 rounded bg-gray-200 hover:bg-gray-300"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    {(categoryContacts[category.id]?.length || 0) === 0 && (
+                      <div className="p-3 text-sm text-gray-500">No contacts in this category</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
