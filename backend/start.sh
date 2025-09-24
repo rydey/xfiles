@@ -14,6 +14,8 @@ npx prisma db push
 echo "🌱 Seeding database..."
 npm run db:seed
 
-# Start the server
+# Build and start the server
+echo "🛠️ Building backend..."
+npm run build
 echo "🚀 Starting Node.js server..."
-npm start
+npm run start
