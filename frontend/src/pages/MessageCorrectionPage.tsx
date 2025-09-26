@@ -23,9 +23,14 @@ interface Message {
   };
 }
 
+interface MessageInstance {
+  targetMessage: Message;
+  contextMessages: Message[];
+  timestamp: string;
+}
+
 interface MessageContext {
-  messages: Message[];
-  targetMessage: Message | null;
+  messageInstances: MessageInstance[];
   total: number;
 }
 
@@ -38,8 +43,7 @@ interface Contact {
 
 const MessageCorrectionPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [targetMessage, setTargetMessage] = useState<Message | null>(null);
+  const [messageInstances, setMessageInstances] = useState<MessageInstance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -161,17 +165,18 @@ const MessageCorrectionPage: React.FC = () => {
       const response = await api.get(`/messages/search?q=${encodeURIComponent(searchTerm)}`);
       const data: MessageContext = response.data;
       
-      setMessages(data.messages);
-      setTargetMessage(data.targetMessage);
+      setMessageInstances(data.messageInstances);
       
-      if (data.targetMessage) {
-        setEditSenderId(data.targetMessage.sender?.id || '');
-        setEditReceiverId(data.targetMessage.receiver?.id || '');
-        setEditDirection(data.targetMessage.direction);
+      // Initialize with first instance if available
+      if (data.messageInstances.length > 0) {
+        const firstInstance = data.messageInstances[0];
+        setEditSenderId(firstInstance.targetMessage.sender?.id || '');
+        setEditReceiverId(firstInstance.targetMessage.receiver?.id || '');
+        setEditDirection(firstInstance.targetMessage.direction);
         
         // Initialize search terms with current values
-        setSenderSearchTerm(data.targetMessage.sender ? getContactDisplayName(data.targetMessage.sender) : '');
-        setReceiverSearchTerm(data.targetMessage.receiver ? getContactDisplayName(data.targetMessage.receiver) : '');
+        setSenderSearchTerm(firstInstance.targetMessage.sender ? getContactDisplayName(firstInstance.targetMessage.sender) : '');
+        setReceiverSearchTerm(firstInstance.targetMessage.receiver ? getContactDisplayName(firstInstance.targetMessage.receiver) : '');
       }
     } catch (e: any) {
       const errorMessage = e.response?.data?.error || e.message || 'Failed to search messages';
@@ -227,8 +232,8 @@ const MessageCorrectionPage: React.FC = () => {
     }
   };
 
-  const isTargetMessage = (message: Message) => {
-    return targetMessage && message.id === targetMessage.id;
+  const isTargetMessage = (message: Message, targetMessage: Message) => {
+    return message.id === targetMessage.id;
   };
 
   return (
@@ -319,63 +324,65 @@ const MessageCorrectionPage: React.FC = () => {
           </div>
         )}
 
-        {/* Target Message Edit Section */}
-        {targetMessage && (
-          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {editingMessageId === targetMessage.id ? 'Editing Target Message' : 'Target Message (First Match)'}
-              </h2>
-              <div className="flex space-x-2">
-                {!editing ? (
-                  <button
-                    onClick={() => startEditingMessage(targetMessage)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    <span>Edit</span>
-                  </button>
-                ) : editingMessageId === targetMessage.id ? (
+        {/* Message Instances */}
+        {messageInstances.length > 0 && (
+          <div className="space-y-6">
+            {messageInstances.map((instance, instanceIndex) => (
+              <div key={instance.targetMessage.id} className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    {editingMessageId === instance.targetMessage.id ? 'Editing Message' : `Message Instance ${instanceIndex + 1}`}
+                  </h2>
                   <div className="flex space-x-2">
-                    <button
-                      onClick={cancelEditing}
-                      className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSave}
-                      disabled={saving}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center space-x-2"
-                    >
-                      {saving ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      ) : (
-                        <Save className="w-4 h-4" />
-                      )}
-                      <span>Save</span>
-                    </button>
+                    {!editing ? (
+                      <button
+                        onClick={() => startEditingMessage(instance.targetMessage)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        <span>Edit</span>
+                      </button>
+                    ) : editingMessageId === instance.targetMessage.id ? (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={cancelEditing}
+                          className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSave}
+                          disabled={saving}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center space-x-2"
+                        >
+                          {saving ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          ) : (
+                            <Save className="w-4 h-4" />
+                          )}
+                          <span>Save</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEditingMessage(instance.targetMessage)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        <span>Edit</span>
+                      </button>
+                    )}
                   </div>
-                ) : (
-                  <button
-                    onClick={() => startEditingMessage(targetMessage)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    <span>Edit</span>
-                  </button>
-                )}
-              </div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 mb-4">
-              <p className="text-gray-900 mb-2">{targetMessage.content}</p>
-              <div className="text-sm text-gray-500">
-                {formatMaldivesTime(targetMessage.timestamp)} • {targetMessage.messageType}
-              </div>
-            </div>
+                <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                  <p className="text-gray-900 mb-2">{instance.targetMessage.content}</p>
+                  <div className="text-sm text-gray-500">
+                    {formatMaldivesTime(instance.targetMessage.timestamp)} • {instance.targetMessage.messageType}
+                  </div>
+                </div>
 
-            {editing && editingMessageId === targetMessage.id && (
+                {editing && editingMessageId === instance.targetMessage.id && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -526,228 +533,46 @@ const MessageCorrectionPage: React.FC = () => {
           </div>
         )}
 
-        {/* Edit Form for Any Message */}
-        {editing && editingMessageId && editingMessageId !== targetMessage?.id && (
-          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Editing Message (Match #{messages.findIndex(m => m.id === editingMessageId) + 1})
-              </h2>
-              <div className="flex space-x-2">
-                <button
-                  onClick={cancelEditing}
-                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center space-x-2"
-                >
-                  {saving ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  ) : (
-                    <Save className="w-4 h-4" />
-                  )}
-                  <span>Save</span>
-                </button>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Direction
-                </label>
-                <select
-                  value={editDirection}
-                  onChange={(e) => setEditDirection(e.target.value as 'FROM' | 'TO' | 'UNKNOWN')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="FROM">FROM (Received)</option>
-                  <option value="TO">TO (Sent)</option>
-                  <option value="UNKNOWN">UNKNOWN</option>
-                </select>
-              </div>
-
-              <div className="relative dropdown-container">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sender
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search sender by name or number..."
-                    value={senderSearchTerm}
-                    onChange={(e) => {
-                      setSenderSearchTerm(e.target.value);
-                      setShowSenderDropdown(true);
-                    }}
-                    onFocus={() => setShowSenderDropdown(true)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  {editSenderId && (
-                    <button
-                      onClick={() => {
-                        setEditSenderId('');
-                        setSenderSearchTerm('');
-                      }}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                
-                {showSenderDropdown && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {getFilteredContacts(senderSearchTerm).map(contact => (
+                {/* Context Messages for this instance */}
+                <div className="mt-4">
+                  <h3 className="text-md font-medium text-gray-700 mb-3">
+                    Context Messages (10 before + target + 10 after)
+                  </h3>
+                  <div className="space-y-4">
+                    {instance.contextMessages.map((message, index) => (
                       <div
-                        key={contact.id}
-                        onClick={() => handleSenderSelect(contact)}
-                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        key={message.id}
+                        className={`p-4 rounded-lg border-2 ${
+                          isTargetMessage(message, instance.targetMessage) 
+                            ? 'border-blue-500 bg-blue-50' 
+                            : editingMessageId === message.id
+                            ? 'border-orange-500 bg-orange-50'
+                            : 'border-gray-200'
+                        }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium text-gray-900">
-                              {getContactDisplayName(contact)}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {contact.phoneNumber}
-                            </div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            {isTargetMessage(message, instance.targetMessage) && (
+                              <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                                TARGET
+                              </span>
+                            )}
+                            {editingMessageId === message.id && (
+                              <span className="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-1 rounded">
+                                EDITING
+                              </span>
+                            )}
                           </div>
-                          <div className={`px-2 py-1 text-xs rounded-full ${
-                            contact.type === 'GROUP' 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {contact.type}
-                          </div>
+                          <button
+                            onClick={() => startEditingMessage(message)}
+                            disabled={editing && editingMessageId !== message.id}
+                            className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            <span>Edit</span>
+                          </button>
                         </div>
-                      </div>
-                    ))}
-                    {getFilteredContacts(senderSearchTerm).length === 0 && (
-                      <div className="px-3 py-2 text-gray-500 text-sm">
-                        No contacts found
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="relative dropdown-container">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Receiver
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search receiver by name or number..."
-                    value={receiverSearchTerm}
-                    onChange={(e) => {
-                      setReceiverSearchTerm(e.target.value);
-                      setShowReceiverDropdown(true);
-                    }}
-                    onFocus={() => setShowReceiverDropdown(true)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  {editReceiverId && (
-                    <button
-                      onClick={() => {
-                        setEditReceiverId('');
-                        setReceiverSearchTerm('');
-                      }}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                
-                {showReceiverDropdown && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {getFilteredContacts(receiverSearchTerm).map(contact => (
-                      <div
-                        key={contact.id}
-                        onClick={() => handleReceiverSelect(contact)}
-                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium text-gray-900">
-                              {getContactDisplayName(contact)}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {contact.phoneNumber}
-                            </div>
-                          </div>
-                          <div className={`px-2 py-1 text-xs rounded-full ${
-                            contact.type === 'GROUP' 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {contact.type}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {getFilteredContacts(receiverSearchTerm).length === 0 && (
-                      <div className="px-3 py-2 text-gray-500 text-sm">
-                        No contacts found
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Message Context */}
-        {messages.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              All Matching Messages ({messages.length} found)
-            </h2>
-            
-            <div className="space-y-4">
-              {messages.map((message, index) => (
-                <div
-                  key={message.id}
-                  className={`p-4 rounded-lg border-2 ${
-                    isTargetMessage(message) 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : editingMessageId === message.id
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      {isTargetMessage(message) && (
-                        <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                          FIRST MATCH
-                        </span>
-                      )}
-                      {editingMessageId === message.id && (
-                        <span className="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-1 rounded">
-                          EDITING
-                        </span>
-                      )}
-                      <span className="text-xs text-gray-500">
-                        Match #{index + 1}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => startEditingMessage(message)}
-                      disabled={editing && editingMessageId !== message.id}
-                      className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                      <span>Edit</span>
-                    </button>
-                  </div>
 
                   <div className={`flex ${getMessageAlignment(message)}`}>
                     <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${getMessageBubbleStyle(message)}`}>
@@ -778,12 +603,17 @@ const MessageCorrectionPage: React.FC = () => {
                   </div>
                 </div>
               ))}
-            </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
         {/* No Results */}
-        {!loading && searchTerm && messages.length === 0 && (
+        {!loading && searchTerm && messageInstances.length === 0 && (
           <div className="text-center py-12">
             <div className="text-gray-400 text-6xl mb-4">🔍</div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No messages found</h3>

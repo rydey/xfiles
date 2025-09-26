@@ -46,110 +46,117 @@ router.get('/search', authenticateToken, async (req, res) => {
 
     if (matchingMessages.length === 0) {
       return res.json({
-        messages: [],
-        targetMessage: null,
+        messageInstances: [],
         total: 0
       });
     }
 
-    // Get the first matching message as target
-    const targetMessage = matchingMessages[0];
+    // For each matching message, get its context (10 before + message + 10 after)
+    const messageInstances = [];
     
-    // Get 10 messages before and 10 messages after the target message
-    const beforeMessages = await prisma.message.findMany({
-      where: {
-        timestamp: {
-          lt: targetMessage.timestamp
-        }
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            phoneNumber: true,
-            type: true
+    for (const matchingMessage of matchingMessages) {
+      // Get 10 messages before this matching message
+      const beforeMessages = await prisma.message.findMany({
+        where: {
+          timestamp: {
+            lt: matchingMessage.timestamp
           }
         },
-        receiver: {
-          select: {
-            id: true,
-            name: true,
-            phoneNumber: true,
-            type: true
-          }
-        }
-      },
-      orderBy: { timestamp: 'desc' },
-      take: 10
-    });
-
-    const afterMessages = await prisma.message.findMany({
-      where: {
-        timestamp: {
-          gt: targetMessage.timestamp
-        }
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            phoneNumber: true,
-            type: true
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              phoneNumber: true,
+              type: true
+            }
+          },
+          receiver: {
+            select: {
+              id: true,
+              name: true,
+              phoneNumber: true,
+              type: true
+            }
           }
         },
-        receiver: {
-          select: {
-            id: true,
-            name: true,
-            phoneNumber: true,
-            type: true
+        orderBy: { timestamp: 'desc' },
+        take: 10
+      });
+
+      // Get 10 messages after this matching message
+      const afterMessages = await prisma.message.findMany({
+        where: {
+          timestamp: {
+            gt: matchingMessage.timestamp
           }
-        }
-      },
-      orderBy: { timestamp: 'asc' },
-      take: 10
-    });
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              phoneNumber: true,
+              type: true
+            }
+          },
+          receiver: {
+            select: {
+              id: true,
+              name: true,
+              phoneNumber: true,
+              type: true
+            }
+          }
+        },
+        orderBy: { timestamp: 'asc' },
+        take: 10
+      });
 
-    // Combine all messages in chronological order
-    const allMessages = [
-      ...beforeMessages.reverse(),
-      targetMessage,
-      ...afterMessages
-    ];
+      // Combine all messages in chronological order for this instance
+      const contextMessages = [
+        ...beforeMessages.reverse(),
+        matchingMessage,
+        ...afterMessages
+      ];
 
-    // Convert BigInt values to strings for JSON serialization
-    const serializedMessages = allMessages.map(message => ({
-      ...message,
-      id: message.id.toString(),
-      sender: message.sender ? {
-        ...message.sender,
-        id: message.sender.id.toString()
-      } : null,
-      receiver: message.receiver ? {
-        ...message.receiver,
-        id: message.receiver.id.toString()
-      } : null
-    }));
+      // Convert BigInt values to strings for JSON serialization
+      const serializedContext = contextMessages.map(message => ({
+        ...message,
+        id: message.id.toString(),
+        sender: message.sender ? {
+          ...message.sender,
+          id: message.sender.id.toString()
+        } : null,
+        receiver: message.receiver ? {
+          ...message.receiver,
+          id: message.receiver.id.toString()
+        } : null
+      }));
 
-    const serializedTarget = {
-      ...targetMessage,
-      id: targetMessage.id.toString(),
-      sender: targetMessage.sender ? {
-        ...targetMessage.sender,
-        id: targetMessage.sender.id.toString()
-      } : null,
-      receiver: targetMessage.receiver ? {
-        ...targetMessage.receiver,
-        id: targetMessage.receiver.id.toString()
-      } : null
-    };
+      const serializedTarget = {
+        ...matchingMessage,
+        id: matchingMessage.id.toString(),
+        sender: matchingMessage.sender ? {
+          ...matchingMessage.sender,
+          id: matchingMessage.sender.id.toString()
+        } : null,
+        receiver: matchingMessage.receiver ? {
+          ...matchingMessage.receiver,
+          id: matchingMessage.receiver.id.toString()
+        } : null
+      };
+
+      messageInstances.push({
+        targetMessage: serializedTarget,
+        contextMessages: serializedContext,
+        timestamp: matchingMessage.timestamp
+      });
+    }
 
     res.json({
-      messages: serializedMessages,
-      targetMessage: serializedTarget,
-      total: allMessages.length
+      messageInstances,
+      total: matchingMessages.length
     });
   } catch (error) {
     console.error('Search messages error:', error);
