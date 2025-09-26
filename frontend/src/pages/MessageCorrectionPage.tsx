@@ -165,11 +165,13 @@ const MessageCorrectionPage: React.FC = () => {
       const response = await api.get(`/messages/search?q=${encodeURIComponent(searchTerm)}`);
       const data: MessageContext = response.data;
       
-      setMessageInstances(data.messageInstances);
+      // Ensure messageInstances exists and is an array
+      const instances = data.messageInstances || [];
+      setMessageInstances(instances);
       
       // Initialize with first instance if available
-      if (data.messageInstances.length > 0) {
-        const firstInstance = data.messageInstances[0];
+      if (instances.length > 0) {
+        const firstInstance = instances[0];
         setEditSenderId(firstInstance.targetMessage.sender?.id || '');
         setEditReceiverId(firstInstance.targetMessage.receiver?.id || '');
         setEditDirection(firstInstance.targetMessage.direction);
@@ -181,6 +183,8 @@ const MessageCorrectionPage: React.FC = () => {
     } catch (e: any) {
       const errorMessage = e.response?.data?.error || e.message || 'Failed to search messages';
       setError(`Search failed: ${errorMessage}`);
+      // Reset state on error
+      setMessageInstances([]);
     } finally {
       setLoading(false);
     }
@@ -325,7 +329,7 @@ const MessageCorrectionPage: React.FC = () => {
         )}
 
         {/* Message Instances */}
-        {messageInstances.length > 0 && (
+        {messageInstances && messageInstances.length > 0 && (
           <div className="space-y-6">
             {messageInstances.map((instance, instanceIndex) => (
               <div key={instance.targetMessage.id} className="bg-white rounded-lg shadow-sm p-6">
@@ -540,7 +544,7 @@ const MessageCorrectionPage: React.FC = () => {
                     Context Messages (10 before + target + 10 after)
                   </h3>
                   <div className="space-y-4">
-                    {instance.contextMessages.map((message, index) => (
+                    {(instance.contextMessages || []).map((message, index) => (
                       <div
                         key={message.id}
                         className={`p-4 rounded-lg border-2 ${
@@ -613,7 +617,7 @@ const MessageCorrectionPage: React.FC = () => {
         )}
 
         {/* No Results */}
-        {!loading && searchTerm && messageInstances.length === 0 && (
+        {!loading && searchTerm && (!messageInstances || messageInstances.length === 0) && (
           <div className="text-center py-12">
             <div className="text-gray-400 text-6xl mb-4">🔍</div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No messages found</h3>
