@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ArrowLeft, Save, Edit3, User, Phone } from 'lucide-react';
 import { formatMaldivesTime, formatMaldivesDate } from '../utils/timeUtils';
+import { api } from '../lib/api';
 
 interface Message {
   id: string;
@@ -41,6 +42,7 @@ const MessageCorrectionPage: React.FC = () => {
   const [targetMessage, setTargetMessage] = useState<Message | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   
@@ -79,12 +81,11 @@ const MessageCorrectionPage: React.FC = () => {
 
   const fetchContacts = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/contacts/public');
-      if (!response.ok) throw new Error('Failed to fetch contacts');
-      const data = await response.json();
-      setContacts(data.contacts);
+      const response = await api.get('/contacts/public');
+      setContacts(response.data.contacts);
     } catch (e: any) {
       console.error('Error fetching contacts:', e);
+      setError('Failed to load contacts. Please refresh the page.');
     }
   };
 
@@ -157,11 +158,8 @@ const MessageCorrectionPage: React.FC = () => {
     setError(null);
     
     try {
-      const response = await fetch(`http://localhost:3001/api/messages/search?q=${encodeURIComponent(searchTerm)}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data: MessageContext = await response.json();
+      const response = await api.get(`/messages/search?q=${encodeURIComponent(searchTerm)}`);
+      const data: MessageContext = response.data;
       
       setMessages(data.messages);
       setTargetMessage(data.targetMessage);
@@ -176,7 +174,8 @@ const MessageCorrectionPage: React.FC = () => {
         setReceiverSearchTerm(data.targetMessage.receiver ? getContactDisplayName(data.targetMessage.receiver) : '');
       }
     } catch (e: any) {
-      setError(`Failed to search messages: ${e.message}`);
+      const errorMessage = e.response?.data?.error || e.message || 'Failed to search messages';
+      setError(`Search failed: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -186,29 +185,27 @@ const MessageCorrectionPage: React.FC = () => {
     if (!editingMessageId) return;
     
     setSaving(true);
+    setError(null);
+    
     try {
-      const response = await fetch(`http://localhost:3001/api/messages/${editingMessageId}/correct`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          senderId: editSenderId || null,
-          receiverId: editReceiverId || null,
-          direction: editDirection
-        })
+      await api.put(`/messages/${editingMessageId}/correct`, {
+        senderId: editSenderId || null,
+        receiverId: editReceiverId || null,
+        direction: editDirection
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update message');
-      }
       
       // Refresh the search results
       await searchMessage();
       cancelEditing();
       
+      // Show success feedback
+      setError(null);
+      setSuccessMessage('Message corrected successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+      
     } catch (e: any) {
-      setError(`Failed to save changes: ${e.message}`);
+      const errorMessage = e.response?.data?.error || e.message || 'Failed to save changes';
+      setError(`Save failed: ${errorMessage}`);
     } finally {
       setSaving(false);
     }
@@ -295,7 +292,30 @@ const MessageCorrectionPage: React.FC = () => {
         {/* Error Display */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-red-600">{error}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-red-600">{error}</p>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-600 ml-4"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Success Display */}
+        {successMessage && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <p className="text-green-600">{successMessage}</p>
+              <button
+                onClick={() => setSuccessMessage(null)}
+                className="text-green-400 hover:text-green-600 ml-4"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         )}
 
