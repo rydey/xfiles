@@ -95,6 +95,7 @@ const MessageCorrectionPage: React.FC = () => {
 
   // Filter contacts based on search term
   const getFilteredContacts = (searchTerm: string) => {
+    if (!contacts || !Array.isArray(contacts)) return [];
     if (!searchTerm.trim()) return contacts;
     
     return contacts.filter(contact => 
@@ -165,8 +166,11 @@ const MessageCorrectionPage: React.FC = () => {
       const response = await api.get(`/messages/search?q=${encodeURIComponent(searchTerm)}`);
       const data: MessageContext = response.data;
       
+      console.log('API Response:', data); // Debug log
+      
       // Ensure messageInstances exists and is an array
       const instances = data.messageInstances || [];
+      console.log('Instances:', instances); // Debug log
       setMessageInstances(instances);
       
       // Initialize with first instance if available
@@ -331,7 +335,9 @@ const MessageCorrectionPage: React.FC = () => {
         {/* Message Instances */}
         {messageInstances && messageInstances.length > 0 && (
           <div className="space-y-6">
-            {messageInstances.map((instance, instanceIndex) => (
+            {messageInstances.map((instance, instanceIndex) => {
+              if (!instance || !instance.targetMessage) return null;
+              return (
               <div key={instance.targetMessage.id} className="bg-white rounded-lg shadow-sm p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-gray-900">
@@ -612,7 +618,8 @@ const MessageCorrectionPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
