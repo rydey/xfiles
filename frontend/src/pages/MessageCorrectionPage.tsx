@@ -324,7 +324,7 @@ const MessageCorrectionPage: React.FC = () => {
           <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">
-                {editingMessageId === targetMessage.id ? 'Editing Target Message' : 'Target Message'}
+                {editingMessageId === targetMessage.id ? 'Editing Target Message' : 'Target Message (First Match)'}
               </h2>
               <div className="flex space-x-2">
                 {!editing ? (
@@ -526,12 +526,12 @@ const MessageCorrectionPage: React.FC = () => {
           </div>
         )}
 
-        {/* Edit Form for Context Messages */}
+        {/* Edit Form for Any Message */}
         {editing && editingMessageId && editingMessageId !== targetMessage?.id && (
           <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">
-                Editing Message
+                Editing Message (Match #{messages.findIndex(m => m.id === editingMessageId) + 1})
               </h2>
               <div className="flex space-x-2">
                 <button
@@ -708,7 +708,7 @@ const MessageCorrectionPage: React.FC = () => {
         {messages.length > 0 && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Message Context (10 before + target + 10 after)
+              All Matching Messages ({messages.length} found)
             </h2>
             
             <div className="space-y-4">
@@ -727,7 +727,7 @@ const MessageCorrectionPage: React.FC = () => {
                     <div className="flex items-center space-x-2">
                       {isTargetMessage(message) && (
                         <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                          TARGET
+                          FIRST MATCH
                         </span>
                       )}
                       {editingMessageId === message.id && (
@@ -735,6 +735,9 @@ const MessageCorrectionPage: React.FC = () => {
                           EDITING
                         </span>
                       )}
+                      <span className="text-xs text-gray-500">
+                        Match #{index + 1}
+                      </span>
                     </div>
                     <button
                       onClick={() => startEditingMessage(message)}
