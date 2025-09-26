@@ -41,6 +41,11 @@ const HomePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!contacts || contacts.length === 0) {
+      setFilteredContacts([]);
+      return;
+    }
+    
     if (searchTerm.trim() === '') {
       // Default view: only contacts with more than 100 messages
       setFilteredContacts(contacts.filter(c => (c.messageCount || 0) > 100));
@@ -64,11 +69,15 @@ const HomePage: React.FC = () => {
     setError(null);
     try {
       const response = await api.get('/contacts/public');
-      setContacts(response.data.contacts);
+      const contactsData = response.data.contacts || [];
+      setContacts(contactsData);
       // Initialize default view to >100 messages
-      setFilteredContacts((response.data.contacts as Contact[]).filter((c: Contact) => (c.messageCount || 0) > 100));
+      setFilteredContacts(contactsData.filter((c: Contact) => (c.messageCount || 0) > 100));
     } catch (e: any) {
       setError(`Failed to fetch contacts: ${e.message}`);
+      // Reset state on error
+      setContacts([]);
+      setFilteredContacts([]);
     } finally {
       setLoading(false);
     }
@@ -223,7 +232,7 @@ const HomePage: React.FC = () => {
       {/* Footer */}
       <div className="max-w-md mx-auto px-4 py-6">
         <div className="text-center text-sm text-gray-500">
-          {filteredContacts.length} of {contacts.length} contacts
+          {filteredContacts?.length || 0} of {contacts?.length || 0} contacts
         </div>
       </div>
     </div>

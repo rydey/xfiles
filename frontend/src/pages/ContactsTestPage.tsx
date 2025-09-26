@@ -48,8 +48,8 @@ const ContactsTestPage: React.FC = () => {
       }
       
       const data: ContactsResponse = await response.json();
-      setContacts(data.contacts);
-      setTotal(data.total);
+      setContacts(data.contacts || []);
+      setTotal(data.total || 0);
       setError(null);
     } catch (err) {
       console.error('Error fetching contacts:', err);
@@ -59,7 +59,7 @@ const ContactsTestPage: React.FC = () => {
     }
   };
 
-  const filteredContacts = contacts.filter(contact => {
+  const filteredContacts = (contacts || []).filter(contact => {
     const matchesSearch = !searchTerm || 
       contact.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contact.phoneNumber.includes(searchTerm);
